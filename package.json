@@ -1,15 +1,21 @@
 {
   "dependencies": {
+    "@ladjs/graceful": "^1.0.5",
+    "bree": "^6.4.0",
+    "cabin": "^9.0.4",
     "coinbase-pro-node": "^3.0.8",
     "dayjs": "^1.10.7",
-    "dotenv-defaults": "^3.0.0"
+    "dotenv-defaults": "^3.0.0",
+    "ts-node": "^10.4.0",
+    "typescript": "^4.4.4"
   },
   "name": "cryptobot",
   "description": "A cryptobot made in Node.js",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "npx ts-node ./src/main.ts"
   },
   "repository": {
     "type": "git",
@@ -21,5 +27,8 @@
   "bugs": {
     "url": "https://github.com/CryptoBotHackathon/cryptobot/issues"
   },
-  "homepage": "https://github.com/CryptoBotHackathon/cryptobot#readme"
+  "homepage": "https://github.com/CryptoBotHackathon/cryptobot#readme",
+  "devDependencies": {
+    "@types/bree": "^6.2.1"
+  }
 }
