@@ -13,7 +13,7 @@ export function initClient(): CoinbasePro {
       useSandbox: true,
     });
   } else if (process.env.USE_SANDBOX === 'false') {
-    console.info("Using Coinbase Pro's production environment with API key...");
+    console.info(`Using Coinbase Pro's production environment with API key.. ${process.env.COINBASE_PRO_PASSPHRASE!}.`);
 
     return new CoinbasePro({
       apiKey: process.env.COINBASE_PRO_API_KEY!,

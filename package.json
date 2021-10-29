@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "coinbase-pro-node": "^3.0.8",
+    "dayjs": "^1.10.7",
     "dotenv-defaults": "^3.0.0"
   },
   "name": "cryptobot",
