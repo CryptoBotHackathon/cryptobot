@@ -1,0 +1,24 @@
+{
+  "dependencies": {
+    "coinbase-pro-node": "^3.0.8",
+    "dotenv-defaults": "^3.0.0"
+  },
+  "name": "cryptobot",
+  "description": "A cryptobot made in Node.js",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CryptoBotHackathon/cryptobot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/CryptoBotHackathon/cryptobot/issues"
+  },
+  "homepage": "https://github.com/CryptoBotHackathon/cryptobot#readme"
+}
