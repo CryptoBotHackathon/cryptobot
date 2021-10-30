@@ -1,5 +1,7 @@
 import { initClient } from "./init";
 import { CandleGranularity, AccountAPI, OrderType, MarketOrder, OrderSide } from 'coinbase-pro-node';
+const axios = require('axios').default;
+
 
 let dayjs = require('dayjs');
 const client = initClient();
@@ -14,7 +16,7 @@ let FgCyan = `\x1b[36m`
 let FgWhite = `\x1b[37m`
 
 function log(message: string, color = "") {
-  console.log(color, `${dayjs().format('YYYY-MM-DD HH:mm:ss')}: ${message}`)
+  console.log(color, `${dayjs().format('YYYY-MM-DD HH:mm:ss')}: ${message}`, FgWhite)
 }
 
 function conditionCheckHistorical(t: any) {
@@ -94,6 +96,17 @@ function getTMinus(candles: any, endTime: any) {
   return [t,tMinus5, tMinus10, tMinus60, tMinus120, tMinus180];
 }
 
+function sendToApi(resObj: any) {
+  axios.post(process.env.DASH_API_URL, resObj)
+  .then((response: string) => {
+    log(response, FgBlue);
+  })
+  .catch((error: string) => {
+    log(error, FgRed);
+  });
+  return;
+}
+
 function sumAllBuys(fills: any) {
   let totalBuyPrize = 0;
   for (let i = 0; fills.data[i].side != "sell" && i < fills.data.length; i++){
@@ -128,18 +141,21 @@ function howMuch(wallets: any, currency?: string) {
 async function buyCurrency(amount: number, currency?: string) {
   let marketOrder: MarketOrder = {funds: String(amount), side: OrderSide.BUY, product_id: currency?currency:"", type: OrderType.MARKET, }
   let placed_order = await client.rest.order.placeOrder(marketOrder)
+  sendToApi(placed_order)
   return placed_order;
 }
 
-async function sellCurrency(amount: number, currency?: string) {
+async function sellCurrency(amount: number, holdingsValue: number, currency?: string) {
   let marketOrder: MarketOrder = {size: String(amount), side: OrderSide.SELL, product_id: currency?currency:"", type: OrderType.MARKET}
   let placed_order = await client.rest.order.placeOrder(marketOrder)
+  let modifiedObj:any = placed_order
+  modifiedObj.funds = holdingsValue
+  sendToApi(modifiedObj)
   return placed_order;
 }
 
 function areAllEnvFilled() {
   if (process.env.TARGET_CURRENCY != undefined
-    && process.env.TARGET_CRYPTO != undefined
     && process.env.MINIMAL_DEPOT_FUNDS != undefined
     && process.env.DEPOT_PULL_PERCENTAGE != undefined) {
     return true;
@@ -172,7 +188,7 @@ function isLastSellpriceBigger(fills: any, currentCryptoPrice: any, fees: any) {
   // const profiles = await client.rest.profile.listProfiles(true);
   // const wallets = await client.rest.account.listAccounts();
 
-export async function main(): Promise<void> {
+export async function main(cryptoCurrency: any): Promise<void> {
   const user_auth_test = await client.rest.user.verifyAuthentication();
 
   if (!user_auth_test && !areAllEnvFilled) {
@@ -182,23 +198,31 @@ export async function main(): Promise<void> {
   let endTime = dayjs().format()
   let startTime = dayjs().subtract(3.1, 'hours').format()
   
-  const candles = await client.rest.product.getCandles(`${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`, {
+  const candles = await client.rest.product.getCandles(`${cryptoCurrency}-${process.env.TARGET_CURRENCY}`, {
     end: endTime,
     granularity: CandleGranularity.ONE_MINUTE,
     start: startTime,
   });
 
   const fees = await client.rest.fee.getCurrentFees();
-  const fills = await client.rest.fill.getFillsByProductId(`${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
+  const fills = await client.rest.fill.getFillsByProductId(`${cryptoCurrency}-${process.env.TARGET_CURRENCY}`)
+
+  try {
+    fills.data[0].side
+  } catch (e) {
+    log("No fills found for currency pair", FgRed);
+    return
+  }
   const wallets = await client.rest.account.listAccounts();
 
   let returnCandles = getTMinus(candles, endTime);
+
   let sumOfAllBuys_ = sumAllBuys(fills)
   
   let conditionHistorical = conditionCheckHistorical(returnCandles)
-  let conditionHistorical2 = -1//conditionCheckHistorical2(returnCandles)
-  let minimalProfit_ = minimalProfit(sumOfAllBuys_, Number(fees.taker_fee_rate), 0.00)
-  let currentCryptoPrice = await getCurrentCryptoPrice(`${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
+  let conditionHistorical2 = conditionCheckHistorical2(returnCandles)
+  let minimalProfit_ = minimalProfit(sumOfAllBuys_, Number(fees.taker_fee_rate), 0.0)
+  let currentCryptoPrice = await getCurrentCryptoPrice(`${cryptoCurrency}-${process.env.TARGET_CURRENCY}`)
 
   log(`Entering Loop ...`)
   switch (conditionHistorical2) {
@@ -208,17 +232,17 @@ export async function main(): Promise<void> {
     case 1:
       // Sell Coin
       log(`Downwards Trend`, FgGreen)
-      let amountCrypto = howMuch(wallets, process.env.TARGET_CRYPTO)
+      let amountCrypto = howMuch(wallets, cryptoCurrency)
       let currentValueCrypto = amountCrypto * Number(currentCryptoPrice.price)
       
       log(`Minimal Profit: ${minimalProfit_}`)
-      log(`Current Price of Crypto Holdings: ${amountCrypto * Number(currentCryptoPrice.price)}`)
+      log(`Current Price of Crypto Holdings: ${currentValueCrypto}`)
 
       log(`Minimal acceptable profit < amount of crypto * current price of crypto`)
       if (sumOfAllBuys_ > 0 && amountCrypto > 0 && minimalProfit_ < currentValueCrypto) {
         let sellAmount = amountCrypto
-        let placed_order = await sellCurrency(sellAmount, `${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
-        log(`Condition 1 met, sold ${placed_order.size} ${process.env.TARGET_CRYPTO} for ${sellAmount} ${process.env.TARGET_CURRENCY}`)
+        let placed_order = await sellCurrency(sellAmount, currentValueCrypto, `${cryptoCurrency}-${process.env.TARGET_CURRENCY}`)
+        log(`Condition 1 met, sold ${placed_order.size} ${cryptoCurrency} for ${currentValueCrypto} ${process.env.TARGET_CURRENCY}`)
       }
       
       break;
@@ -233,9 +257,9 @@ export async function main(): Promise<void> {
       log(`Checking if price of last sell is bigger than current holding price`)
       if (amountMoney > Number(process.env.MINIMAL_DEPOT_FUNDS) && isLastSellpriceBigger(fills, currentCryptoPrice, Number(fees.taker_fee_rate))) {
         let buyAmount = amountMoney * Number(process.env.DEPOT_PULL_PERCENTAGE)
-        let placed_order = await buyCurrency(Number(buyAmount.toPrecision(3)), `${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
+        let placed_order = await buyCurrency(Number(buyAmount.toPrecision(3)), `${cryptoCurrency}-${process.env.TARGET_CURRENCY}`)
         console.log(placed_order)
-        log(`Condition 1 met, bought ${placed_order.size} ${process.env.TARGET_CRYPTO} for ${buyAmount} ${process.env.TARGET_CURRENCY}`)
+        log(`Condition 1 met, bought ${placed_order.size} ${cryptoCurrency} for ${buyAmount} ${process.env.TARGET_CURRENCY}`)
       }
       break;
     default:
