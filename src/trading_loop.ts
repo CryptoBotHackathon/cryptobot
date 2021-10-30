@@ -1,11 +1,18 @@
 import { initClient } from "./init";
-import { CandleGranularity, AccountAPI, OrderType } from 'coinbase-pro-node';
+import { CandleGranularity, AccountAPI, OrderType, MarketOrder, OrderSide } from 'coinbase-pro-node';
 
-var dayjs = require('dayjs');
+let dayjs = require('dayjs');
+const client = initClient();
 
 function conditionCheckHistorical(t: any) {
+  /** 
+   * @return 1: in Highg (sell)
+   * @return -1: in Low (buy)
+   * @return 0: do nothing (hold)
+   */
   let out;
   if (t[2] > t[1] && t[1] > t[0] && t[2] > t[3] && t[3] > t[4] && t[4] > t[5]) {
+
     out = 1;
   } else if (t[2] < t[1] && t[1] < t[0] && t[2] < t[3] && t[3] < t[4] && t[4] < t[5]) {
     out = -1;
@@ -65,20 +72,54 @@ function sumAllBuys(fills_usd: any) {
 }
 
 
-export async function main(): Promise<void> {
-  const client = initClient();
+function howMuch(wallets: any, currency?: string) {
+  /*
+  currencies: USD, BTC, EUR
+  */
+  let wallet_btc;
 
-  // const user_auth_test = await client.rest.user.verifyAuthentication();
+  for (const wallet of wallets) {
+    if (wallet.currency == currency) {
+      wallet_btc = wallet;
+    }
+  }
+  return Number(wallet_btc.balance);
+}
+
+async function buyCurrency(amount: number, currency?: string) {
+  let marketOrder: MarketOrder = {funds: String(amount), side: OrderSide.BUY, product_id: currency?currency:"", type: OrderType.MARKET}
+  let placed_order = await client.rest.order.placeOrder(marketOrder)
+  return placed_order;
+}
+
+function areAllEnvFilled() {
+  if (process.env.TARGET_CURRENCY != undefined
+    && process.env.TARGET_CRYPTO != undefined
+    && process.env.MINIMAL_DEPOT_FUNDS != undefined
+    && process.env.DEPOT_PULL_PERCENTAGE != undefined) {
+    return true;
+  } else {
+    throw new Error("Not all env variables defined. Define them in the .env file");
+    }
+}
+  // const products = await client.rest.product.getProducts();
+    // const products = await client.rest.product.getProducts();
+    // if (products) {
+    //   console.log(products)
+    //   return
+    // }
   // const profiles = await client.rest.profile.listProfiles(true);
   // const wallets = await client.rest.account.listAccounts();
+
+export async function main(): Promise<void> {
+  const user_auth_test = await client.rest.user.verifyAuthentication();
+
+  if (!user_auth_test && !areAllEnvFilled) {
+    return;
+  }
  
-  // console.log(user_auth_test, profiles, wallets);
   let endTime = dayjs().format()
   let startTime = dayjs().subtract(3.1, 'hours').format()
-  
-  const fees = await client.rest.fee.getCurrentFees();
-  const products = await client.rest.product.getProducts();
-  const fills_usd = await client.rest.fill.getFillsByProductId('BTC-USD')
   
   const candles = await client.rest.product.getCandles('BTC-USD', {
     end: endTime,
@@ -86,11 +127,46 @@ export async function main(): Promise<void> {
     start: startTime,
   });
 
+  const fees = await client.rest.fee.getCurrentFees();
+  const fills_usd = await client.rest.fill.getFillsByProductId('BTC-USD')
+  const wallets = await client.rest.account.listAccounts();
+
   let returnCandles = getTMinus(candles, endTime);
   let sumOfAllBuys_ = sumAllBuys(fills_usd)
   
-  let conditionHistorical = conditionCheckHistorical(returnCandles)
+  let conditionHistorical = -1 //conditionCheckHistorical(returnCandles)
   let minimalProfit_ = minimalProfit(sumOfAllBuys_, Number(fees.taker_fee_rate), 0.01)
-  console.log(minimalProfit_)
+
+  switch (conditionHistorical) {
+    case 0:
+      console.log("Not worth to buy/sell right now")
+      break;
+    case 1:
+      // Sell Coin
+
+      // was last trade a BUY
+      if (fills_usd.data[0].side == "buy" ) {
+
+      }
+      
+      break;
+    case -1:
+      // Buy Coin
+
+      // how much USD to we have
+      // - depotPullPercent: 
+      // Amount of percentage of Total amount of coin in wallet to invest.Ideally should be beteween 5 - 20 %
+      let amountMoney = howMuch(wallets, process.env.TARGET_CURRENCY);
+
+      if (amountMoney > Number(process.env.MINIMAL_DEPOT_FUNDS)) {
+        let buyAmount = amountMoney * Number(process.env.DEPOT_PULL_PERCENTAGE)
+        let placed_order = await buyCurrency(Number(buyAmount.toPrecision(6)), `${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
+        console.log(placed_order)
+        // if prior buy is higher OR no prior buy
+      }
+      break;
+    default:
+      break;
+  }
   
 }
