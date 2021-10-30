@@ -4,6 +4,19 @@ import { CandleGranularity, AccountAPI, OrderType, MarketOrder, OrderSide } from
 let dayjs = require('dayjs');
 const client = initClient();
 
+let FgBlack = `\x1b[30m`
+let FgRed = `\x1b[31m`
+let FgGreen = `\x1b[32m`
+let FgYellow = `\x1b[33m`
+let FgBlue = `\x1b[34m`
+let FgMagenta = `\x1b[35m`
+let FgCyan = `\x1b[36m`
+let FgWhite = `\x1b[37m`
+
+function log(message: string, color = "") {
+  console.log(color, `${dayjs().format('YYYY-MM-DD HH:mm:ss')}: ${message}`)
+}
+
 function conditionCheckHistorical(t: any) {
   /** 
    * @return 1: in Highg (sell)
@@ -15,6 +28,24 @@ function conditionCheckHistorical(t: any) {
 
     out = 1;
   } else if (t[2] < t[1] && t[1] < t[0] && t[2] < t[3] && t[3] < t[4] && t[4] < t[5]) {
+    out = -1;
+  } else {
+    out = 0;
+  }
+  return out;
+}
+
+function conditionCheckHistorical2(t: any) {
+  /** 
+   * @return 1: in High (sell)
+   * @return -1: in Low (buy)
+   * @return 0: do nothing (hold)
+   */
+  let out;
+  if (t[2] < t[1] && t[1] > t[0] ) {
+
+    out = 1;
+  } else if (t[2] < t[1] && t[1] < t[0]) {
     out = -1;
   } else {
     out = 0;
@@ -63,18 +94,18 @@ function getTMinus(candles: any, endTime: any) {
   return [t,tMinus5, tMinus10, tMinus60, tMinus120, tMinus180];
 }
 
-function sumAllBuys(fills_usd: any) {
+function sumAllBuys(fills: any) {
   let totalBuyPrize = 0;
-  for (let i = 0; fills_usd.data[i].side != "sell" && i < fills_usd.data.length; i++){
-    totalBuyPrize += Number(fills_usd.data[i].usd_volume) + Number(fills_usd.data[i].fee);
+  for (let i = 0; fills.data[i].side != "sell" && i < fills.data.length; i++){
+    totalBuyPrize += Number(fills.data[i].usd_volume) + Number(fills.data[i].fee);
   }
   return totalBuyPrize;
 }
 
-function sumAllSells(fills_usd: any) {
+function sumAllSells(fills: any) {
   let totalBuyPrize = 0;
-  for (let i = 0; fills_usd.data[i].side != "buy" && i < fills_usd.data.length; i++){
-    totalBuyPrize += Number(fills_usd.data[i].usd_volume) + Number(fills_usd.data[i].fee);
+  for (let i = 0; fills.data[i].side != "buy" && i < fills.data.length; i++){
+    totalBuyPrize += Number(fills.data[i].usd_volume) + Number(fills.data[i].fee);
   }
   return totalBuyPrize;
 }
@@ -123,9 +154,9 @@ async function getCurrentCryptoPrice(currency: any) {
   return crypto_product;
 }
 
-function isLastSellpriceBigger(fills_usd: any, currentCryptoPrice: any, fees: any) {
-  if (fills_usd.data[0].side == "sell") {
-    if (Number(currentCryptoPrice.price)*(1+2*fees) < Number(fills_usd.data[0].price)) {
+function isLastSellpriceBigger(fills: any, currentCryptoPrice: any, fees: any) {
+  if (fills.data[0].side == "sell") {
+    if (Number(currentCryptoPrice.price)*(1+2*fees) < Number(fills.data[0].price)) {
       return true
     }
   } else {
@@ -135,7 +166,7 @@ function isLastSellpriceBigger(fills_usd: any, currentCryptoPrice: any, fees: an
   // const products = await client.rest.product.getProducts();
     // const products = await client.rest.product.getProducts();
     // if (products) {
-    //   console.log(products)
+    //   log(products)
     //   return
     // }
   // const profiles = await client.rest.profile.listProfiles(true);
@@ -151,58 +182,59 @@ export async function main(): Promise<void> {
   let endTime = dayjs().format()
   let startTime = dayjs().subtract(3.1, 'hours').format()
   
-  const candles = await client.rest.product.getCandles('BTC-USD', {
+  const candles = await client.rest.product.getCandles(`${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`, {
     end: endTime,
     granularity: CandleGranularity.ONE_MINUTE,
     start: startTime,
   });
 
   const fees = await client.rest.fee.getCurrentFees();
-  const fills_usd = await client.rest.fill.getFillsByProductId('BTC-USD')
+  const fills = await client.rest.fill.getFillsByProductId(`${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
   const wallets = await client.rest.account.listAccounts();
 
   let returnCandles = getTMinus(candles, endTime);
-  let sumOfAllBuys_ = sumAllBuys(fills_usd)
+  let sumOfAllBuys_ = sumAllBuys(fills)
   
   let conditionHistorical = conditionCheckHistorical(returnCandles)
-  let minimalProfit_ = minimalProfit(sumOfAllBuys_, Number(fees.taker_fee_rate), 0.01)
+  let conditionHistorical2 = conditionCheckHistorical2(returnCandles)
+  let minimalProfit_ = minimalProfit(sumOfAllBuys_, Number(fees.taker_fee_rate), 0.00)
   let currentCryptoPrice = await getCurrentCryptoPrice(`${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
 
-  console.log(`Entering Loop ...`)
-  switch (conditionHistorical) {
+  log(`Entering Loop ...`)
+  switch (conditionHistorical2) {
     case 0:
-      console.log("No Trend")
+      log("No Trend", FgYellow)
       break;
     case 1:
       // Sell Coin
-      console.log(`Upwards Trend`)
+      log(`Downwards Trend`, FgGreen)
       let amountCrypto = howMuch(wallets, process.env.TARGET_CRYPTO)
       let currentValueCrypto = amountCrypto * Number(currentCryptoPrice.price)
       
-      console.info(`Minimal Profit: ${minimalProfit_}`)
-      console.info(`Current Price of Crypto Holdings: ${amountCrypto * Number(currentCryptoPrice.price)}`)
+      log(`Minimal Profit: ${minimalProfit_}`)
+      log(`Current Price of Crypto Holdings: ${amountCrypto * Number(currentCryptoPrice.price)}`)
 
-      console.info(`Minimal acceptable profit < amount of crypto * current price of crypto`)
+      log(`Minimal acceptable profit < amount of crypto * current price of crypto`)
       if (sumOfAllBuys_ > 0 && amountCrypto > 0 && minimalProfit_ < currentValueCrypto) {
         let sellAmount = amountCrypto
         let placed_order = await sellCurrency(sellAmount, `${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
-        console.info(`Condition 1 met, sold ${placed_order.size} ${process.env.TARGET_CRYPTO} for ${sellAmount} ${process.env.TARGET_CURRENCY}`)
+        log(`Condition 1 met, sold ${placed_order.size} ${process.env.TARGET_CRYPTO} for ${sellAmount} ${process.env.TARGET_CURRENCY}`)
       }
       
       break;
     case -1:
       // Buy Coin
-      console.log(`Downwards Trend`)
+      log(`Upwards Trend`, FgBlue)
       // how much USD to we have
       // - depotPullPercent: 
       // Amount of percentage of Total amount of coin in wallet to invest.Ideally should be beteween 5 - 20 %
       let amountMoney = howMuch(wallets, process.env.TARGET_CURRENCY);
 
-      console.log(`Checking if price of last sell is bigger than current holding price`)
-      if (amountMoney > Number(process.env.MINIMAL_DEPOT_FUNDS) && isLastSellpriceBigger(fills_usd, currentCryptoPrice, Number(fees.taker_fee_rate))) {
+      log(`Checking if price of last sell is bigger than current holding price`)
+      if (amountMoney > Number(process.env.MINIMAL_DEPOT_FUNDS) && isLastSellpriceBigger(fills, currentCryptoPrice, Number(fees.taker_fee_rate))) {
         let buyAmount = amountMoney * Number(process.env.DEPOT_PULL_PERCENTAGE)
         let placed_order = await buyCurrency(Number(buyAmount.toPrecision(6)), `${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
-        console.info(`Condition 1 met, bought ${placed_order.size} ${process.env.TARGET_CRYPTO} for ${buyAmount} ${process.env.TARGET_CURRENCY}`)
+        log(`Condition 1 met, bought ${placed_order.size} ${process.env.TARGET_CRYPTO} for ${buyAmount} ${process.env.TARGET_CURRENCY}`)
       }
       break;
     default:
