@@ -146,8 +146,8 @@ export async function main(): Promise<void> {
   let returnCandles = getTMinus(candles, endTime);
   let sumOfAllBuys_ = sumAllBuys(fills_usd)
   
-  let conditionHistorical = 1 //conditionCheckHistorical(returnCandles)
-  let minimalProfit_ = 1 //minimalProfit(sumOfAllBuys_, Number(fees.taker_fee_rate), 0.01)
+  let conditionHistorical = conditionCheckHistorical(returnCandles)
+  let minimalProfit_ = minimalProfit(sumOfAllBuys_, Number(fees.taker_fee_rate), 0.01)
 
   switch (conditionHistorical) {
     case 0:
