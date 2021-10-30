@@ -71,6 +71,14 @@ function sumAllBuys(fills_usd: any) {
   return totalBuyPrize;
 }
 
+function sumAllSells(fills_usd: any) {
+  let totalBuyPrize = 0;
+  for (let i = 0; fills_usd.data[i].side != "buy" && i < fills_usd.data.length; i++){
+    totalBuyPrize += Number(fills_usd.data[i].usd_volume) + Number(fills_usd.data[i].fee);
+  }
+  return totalBuyPrize;
+}
+
 
 function howMuch(wallets: any, currency?: string) {
   /*
@@ -114,6 +122,16 @@ async function getCurrentCryptoPrice(currency: any) {
   // @ts-ignore
   return crypto_product;
 }
+
+function isLastSellpriceBigger(fills_usd: any, currentCryptoPrice: any, fees: any) {
+  if (fills_usd.data[0].side == "sell") {
+    if (Number(currentCryptoPrice.price)*(1+2*fees) < Number(fills_usd.data[0].price)) {
+      return true
+    }
+  } else {
+    return false
+  }
+}
   // const products = await client.rest.product.getProducts();
     // const products = await client.rest.product.getProducts();
     // if (products) {
@@ -148,39 +166,43 @@ export async function main(): Promise<void> {
   
   let conditionHistorical = conditionCheckHistorical(returnCandles)
   let minimalProfit_ = minimalProfit(sumOfAllBuys_, Number(fees.taker_fee_rate), 0.01)
+  let currentCryptoPrice = await getCurrentCryptoPrice(`${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
 
+  console.log(`Entering Loop ...`)
   switch (conditionHistorical) {
     case 0:
-      console.log("Not worth to buy/sell right now")
+      console.log("No Trend")
       break;
     case 1:
       // Sell Coin
-
+      console.log(`Upwards Trend`)
       let amountCrypto = howMuch(wallets, process.env.TARGET_CRYPTO)
-      let currentCryptoPrice = await getCurrentCryptoPrice(`${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
-      // was last trade a BUY
+      let currentValueCrypto = amountCrypto * Number(currentCryptoPrice.price)
+      
       console.info(`Minimal Profit: ${minimalProfit_}`)
       console.info(`Current Price of Crypto Holdings: ${amountCrypto * Number(currentCryptoPrice.price)}`)
-      if (sumOfAllBuys_ > 0 && amountCrypto > 0 && minimalProfit_ < (amountCrypto * Number(currentCryptoPrice.price))) {
+
+      console.info(`Minimal acceptable profit < amount of crypto * current price of crypto`)
+      if (sumOfAllBuys_ > 0 && amountCrypto > 0 && minimalProfit_ < currentValueCrypto) {
         let sellAmount = amountCrypto
         let placed_order = await sellCurrency(sellAmount, `${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
-        console.log(placed_order)
+        console.info(`Condition 1 met, sold ${placed_order.size} ${process.env.TARGET_CRYPTO} for ${sellAmount} ${process.env.TARGET_CURRENCY}`)
       }
       
       break;
     case -1:
       // Buy Coin
-
+      console.log(`Downwards Trend`)
       // how much USD to we have
       // - depotPullPercent: 
       // Amount of percentage of Total amount of coin in wallet to invest.Ideally should be beteween 5 - 20 %
       let amountMoney = howMuch(wallets, process.env.TARGET_CURRENCY);
 
-      if (amountMoney > Number(process.env.MINIMAL_DEPOT_FUNDS)) {
+      console.log(`Checking if price of last sell is bigger than current holding price`)
+      if (amountMoney > Number(process.env.MINIMAL_DEPOT_FUNDS) && isLastSellpriceBigger(fills_usd, currentCryptoPrice, Number(fees.taker_fee_rate))) {
         let buyAmount = amountMoney * Number(process.env.DEPOT_PULL_PERCENTAGE)
         let placed_order = await buyCurrency(Number(buyAmount.toPrecision(6)), `${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
-        console.log(placed_order)
-        // if prior buy is higher OR no prior buy
+        console.info(`Condition 1 met, bought ${placed_order.size} ${process.env.TARGET_CRYPTO} for ${buyAmount} ${process.env.TARGET_CURRENCY}`)
       }
       break;
     default:
