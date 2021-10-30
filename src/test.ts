@@ -8,7 +8,7 @@ async function main() {
         console.log("user not authorized")
     }
     const profiles = await client.rest.profile.listProfiles(true);
-    console.log(profiles)
+    console.log(user_auth_test, profiles)
 }
 
 main()

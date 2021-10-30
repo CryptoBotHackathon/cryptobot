@@ -126,7 +126,7 @@ function howMuch(wallets: any, currency?: string) {
 }
 
 async function buyCurrency(amount: number, currency?: string) {
-  let marketOrder: MarketOrder = {funds: String(amount), side: OrderSide.BUY, product_id: currency?currency:"", type: OrderType.MARKET}
+  let marketOrder: MarketOrder = {funds: String(amount), side: OrderSide.BUY, product_id: currency?currency:"", type: OrderType.MARKET, }
   let placed_order = await client.rest.order.placeOrder(marketOrder)
   return placed_order;
 }
