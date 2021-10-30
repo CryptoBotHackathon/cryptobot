@@ -92,6 +92,12 @@ async function buyCurrency(amount: number, currency?: string) {
   return placed_order;
 }
 
+async function sellCurrency(amount: number, currency?: string) {
+  let marketOrder: MarketOrder = {size: String(amount), side: OrderSide.SELL, product_id: currency?currency:"", type: OrderType.MARKET}
+  let placed_order = await client.rest.order.placeOrder(marketOrder)
+  return placed_order;
+}
+
 function areAllEnvFilled() {
   if (process.env.TARGET_CURRENCY != undefined
     && process.env.TARGET_CRYPTO != undefined
@@ -101,6 +107,12 @@ function areAllEnvFilled() {
   } else {
     throw new Error("Not all env variables defined. Define them in the .env file");
     }
+}
+
+async function getCurrentCryptoPrice(currency: any) {
+  let crypto_product = await client.rest.product.getProductTicker(currency)
+  // @ts-ignore
+  return crypto_product;
 }
   // const products = await client.rest.product.getProducts();
     // const products = await client.rest.product.getProducts();
@@ -134,8 +146,8 @@ export async function main(): Promise<void> {
   let returnCandles = getTMinus(candles, endTime);
   let sumOfAllBuys_ = sumAllBuys(fills_usd)
   
-  let conditionHistorical = -1 //conditionCheckHistorical(returnCandles)
-  let minimalProfit_ = minimalProfit(sumOfAllBuys_, Number(fees.taker_fee_rate), 0.01)
+  let conditionHistorical = 1 //conditionCheckHistorical(returnCandles)
+  let minimalProfit_ = 1 //minimalProfit(sumOfAllBuys_, Number(fees.taker_fee_rate), 0.01)
 
   switch (conditionHistorical) {
     case 0:
@@ -144,9 +156,15 @@ export async function main(): Promise<void> {
     case 1:
       // Sell Coin
 
+      let amountCrypto = howMuch(wallets, process.env.TARGET_CRYPTO)
+      let currentCryptoPrice = await getCurrentCryptoPrice(`${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
       // was last trade a BUY
-      if (fills_usd.data[0].side == "buy" ) {
-
+      console.info(`Minimal Profit: ${minimalProfit_}`)
+      console.info(`Current Price of Crypto Holdings: ${amountCrypto * Number(currentCryptoPrice.price)}`)
+      if (sumOfAllBuys_ > 0 && amountCrypto > 0 && minimalProfit_ < (amountCrypto * Number(currentCryptoPrice.price))) {
+        let sellAmount = amountCrypto
+        let placed_order = await sellCurrency(sellAmount, `${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
+        console.log(placed_order)
       }
       
       break;
