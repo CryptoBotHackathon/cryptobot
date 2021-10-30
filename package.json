@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@ladjs/graceful": "^1.0.5",
+    "axios": "^0.24.0",
     "bree": "^6.4.0",
     "cabin": "^9.0.4",
     "coinbase-pro-node": "^3.0.8",

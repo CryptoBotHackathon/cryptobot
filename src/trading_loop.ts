@@ -196,7 +196,7 @@ export async function main(): Promise<void> {
   let sumOfAllBuys_ = sumAllBuys(fills)
   
   let conditionHistorical = conditionCheckHistorical(returnCandles)
-  let conditionHistorical2 = conditionCheckHistorical2(returnCandles)
+  let conditionHistorical2 = -1//conditionCheckHistorical2(returnCandles)
   let minimalProfit_ = minimalProfit(sumOfAllBuys_, Number(fees.taker_fee_rate), 0.00)
   let currentCryptoPrice = await getCurrentCryptoPrice(`${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
 
@@ -233,7 +233,8 @@ export async function main(): Promise<void> {
       log(`Checking if price of last sell is bigger than current holding price`)
       if (amountMoney > Number(process.env.MINIMAL_DEPOT_FUNDS) && isLastSellpriceBigger(fills, currentCryptoPrice, Number(fees.taker_fee_rate))) {
         let buyAmount = amountMoney * Number(process.env.DEPOT_PULL_PERCENTAGE)
-        let placed_order = await buyCurrency(Number(buyAmount.toPrecision(6)), `${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
+        let placed_order = await buyCurrency(Number(buyAmount.toPrecision(3)), `${process.env.TARGET_CRYPTO}-${process.env.TARGET_CURRENCY}`)
+        console.log(placed_order)
         log(`Condition 1 met, bought ${placed_order.size} ${process.env.TARGET_CRYPTO} for ${buyAmount} ${process.env.TARGET_CURRENCY}`)
       }
       break;
